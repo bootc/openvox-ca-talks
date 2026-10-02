@@ -57,7 +57,7 @@ pnpm run export
 
 This runs `slidev export` and writes `slides-export.pdf` in the talk's directory. Export uses headless Chromium via `playwright-chromium`, which pnpm downloads during install.
 
-PDFs aren't committed. On every push to `main` that changes anything in a talk's directory (other than its `README.md`), the [Build slides](.github/workflows/build-slides.yml) workflow exports that talk and attaches the PDF to the workflow run as an artifact. The workflow can also be run by hand to rebuild every talk.
+PDFs aren't committed. On every push to `main` that changes anything in a talk's directory (other than its `README.md` or `SUBMISSION.md`), the [Build slides](.github/workflows/build-slides.yml) workflow exports that talk and attaches the PDF to the workflow run as an artifact. The workflow can also be run by hand to rebuild every talk.
 
 ## Starting a new talk
 

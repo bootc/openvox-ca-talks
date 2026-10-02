@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "talks/*/**"
+      # Talk metadata, not slide content.
       - "!talks/*/README.md"
+      - "!talks/*/SUBMISSION.md"
   # Manual runs rebuild every talk.
   workflow_dispatch:
 
@@ -37,8 +39,12 @@ jobs:
           }
 
           if [ "$EVENT" = push ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            # Any changed file under talks/<slug>/ rebuilds that talk.
-            dirs=$(git diff --name-only "$BEFORE" "$AFTER" -- talks/ | cut -d/ -f1-2)
+            # Any changed file under talks/<slug>/ rebuilds that talk, apart
+            # from the same metadata files the paths filter above ignores.
+            dirs=$(git diff --name-only "$BEFORE" "$AFTER" -- talks/ \
+              ':(exclude,glob)talks/*/README.md' \
+              ':(exclude,glob)talks/*/SUBMISSION.md' \
+              | cut -d/ -f1-2)
           else
             # Manual run, first push, or force-push with an unknown base.
             dirs=$(all_talks)
