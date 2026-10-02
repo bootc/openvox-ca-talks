@@ -7,7 +7,7 @@ info: |
   ## openvox-ca: A Drop-In Puppet CA, Rewritten in Go
 
   Chris Boot and Trevor Vaughan.
-  CfgMgmtCamp 2026.
+  CfgMgmtCamp 2027.
 
   Slides licensed CC BY 4.0.
 author: Chris Boot, Trevor Vaughan

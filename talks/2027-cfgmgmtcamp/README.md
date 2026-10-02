@@ -1,9 +1,10 @@
 # openvox-ca: A Drop-In Puppet CA, Rewritten in Go
 
-- **Event:** CfgMgmtCamp 2026, Ghent
+- **Event:** CfgMgmtCamp 2027, Ghent
+- **Date:** 1 or 2 February 2027 (exact day TBC)
 - **Speakers:** Chris Boot and Trevor Vaughan
 
-**Status:** Submitted to CfgMgmtCamp 2026, awaiting acceptance.
+**Status:** Submitted to CfgMgmtCamp 2027, awaiting acceptance.
 
 ## Abstract
 

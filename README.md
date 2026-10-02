@@ -8,7 +8,7 @@ Each talk lives under `talks/<year>-<event>/` as a self-contained [Slidev](https
 
 ```text
 talks/
-└── 2026-cfgmgmtcamp/
+└── 2027-cfgmgmtcamp/
     ├── slides.md        deck-wide options, and the order of the pages
     ├── pages/           the slides, split into a few files by section
     ├── theme/           the OpenVox Slidev theme (layouts, styles, logos)
@@ -42,7 +42,7 @@ The theme lives inside each talk rather than being shared, so changing it for a 
 Talks use [pnpm](https://pnpm.io). Each `package.json` pins the pnpm version in its `packageManager` field; recent pnpm (or Corepack) switches to that version automatically.
 
 ```sh
-cd talks/2026-cfgmgmtcamp
+cd talks/2027-cfgmgmtcamp
 pnpm install
 pnpm run dev
 ```
@@ -70,7 +70,7 @@ PDFs aren't committed. On every push to `main` that changes anything in a talk's
 
 | Date | Event | Title | Slides | Recording |
 | ---- | ----- | ----- | ------ | --------- |
-| 2026 (TBC) | CfgMgmtCamp 2026 | openvox-ca: A Drop-In Puppet CA, Rewritten in Go | [talks/2026-cfgmgmtcamp](talks/2026-cfgmgmtcamp/) | — |
+| 1 or 2 Feb 2027 (TBC) | CfgMgmtCamp 2027 | openvox-ca: A Drop-In Puppet CA, Rewritten in Go | [talks/2027-cfgmgmtcamp](talks/2027-cfgmgmtcamp/) | — |
 
 ## Licence
 
@@ -78,6 +78,6 @@ Slide content is licensed under [Creative Commons Attribution 4.0 International 
 
 The OpenVox logos in `talks/*/theme/assets/` are © 2025 Romain Tartière (concept) and André Ringel (final touches), and are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), not CC BY 4.0. They're included unmodified, and the theme's closing slide carries the required attribution. If you modify the logos, your modified versions must also be shared under CC BY-SA 4.0. See `theme/assets/README.md` in each talk for the source and file mapping.
 
-The Slidev theme code in `talks/*/theme/` (layouts, styles and configuration, but not the logos) is licensed under the [MIT licence](talks/2026-cfgmgmtcamp/theme/LICENSE), as CC licences aren't designed for code.
+The Slidev theme code in `talks/*/theme/` (layouts, styles and configuration, but not the logos) is licensed under the [MIT licence](talks/2027-cfgmgmtcamp/theme/LICENSE), as CC licences aren't designed for code.
 
 Other code snippets or demos added to this repository later may carry their own licence. Where they do, the licence is stated inline, next to the code or in the file itself.
