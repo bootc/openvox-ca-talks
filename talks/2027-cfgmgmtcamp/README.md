@@ -3,16 +3,13 @@
 - **Event:** CfgMgmtCamp 2027, Ghent
 - **Date:** 1 or 2 February 2027 (exact day TBC)
 - **Speakers:** Chris Boot and Trevor Vaughan
+- **Track:** Vox/Puppet
 
-**Status:** Submitted to CfgMgmtCamp 2027, awaiting acceptance.
+**Status:** Accepted and confirmed for CfgMgmtCamp 2027 as a Short Talk (25 minutes). Day and time TBC.
 
-## Abstract
+## Submission
 
-TBD — see pretalx submission.
-
-## Description
-
-TBD — see pretalx submission.
+The Pretalx submission (title, abstract and the other fields) is kept in [SUBMISSION.md](SUBMISSION.md), ready to copy into Pretalx as it's updated.
 
 ## Running the slides
 
