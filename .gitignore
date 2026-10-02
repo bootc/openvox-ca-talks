@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Slidev build and export output
+dist/
+*.pdf
+*.pptx
+.remote-assets/
+.vite-inspect/
+components.d.ts
+
+# Local overrides
+*.local
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor and OS cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

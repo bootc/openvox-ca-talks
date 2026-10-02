@@ -1,0 +1,23 @@
+{
+  "name": "slidev-theme-openvox",
+  "private": true,
+  "description": "Slidev theme using the OpenVox logos and colours",
+  "license": "MIT",
+  "keywords": [
+    "slidev-theme",
+    "slidev"
+  ],
+  "engines": {
+    "slidev": ">=53.0.0"
+  },
+  "slidev": {
+    "colorSchema": "light",
+    "defaults": {
+      "fonts": {
+        "sans": "Lato",
+        "mono": "Fira Code",
+        "weights": "400,700"
+      }
+    }
+  }
+}

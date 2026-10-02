@@ -1,0 +1,6 @@
+shamefullyHoist: true
+
+# `playwright-chromium` is needed for `slidev export` and has a postinstall
+# script that downloads the browser, so allow it to run.
+allowBuilds:
+  playwright-chromium: true

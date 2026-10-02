@@ -1,0 +1,92 @@
+name: Build slides
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "talks/*/**"
+      - "!talks/*/README.md"
+  # Manual runs rebuild every talk.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Find changed talks
+    runs-on: ubuntu-latest
+    outputs:
+      talks: ${{ steps.talks.outputs.talks }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: List talks to build
+        id: talks
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          all_talks() {
+            for f in talks/*/slides.md; do
+              [ -e "$f" ] && dirname "$f"
+            done
+          }
+
+          if [ "$EVENT" = push ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            # Any changed file under talks/<slug>/ rebuilds that talk.
+            dirs=$(git diff --name-only "$BEFORE" "$AFTER" -- talks/ | cut -d/ -f1-2)
+          else
+            # Manual run, first push, or force-push with an unknown base.
+            dirs=$(all_talks)
+          fi
+
+          # Keep talks that still exist, strip the talks/ prefix, emit JSON.
+          talks=$(for d in $dirs; do [ -f "$d/slides.md" ] && basename "$d"; done \
+            | sort -u | jq -Rnc '[inputs | select(length > 0)]')
+          echo "Talks to build: $talks"
+          echo "talks=$talks" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Export ${{ matrix.talk }}
+    needs: detect
+    if: needs.detect.outputs.talks != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        talk: ${{ fromJSON(needs.detect.outputs.talks) }}
+    defaults:
+      run:
+        working-directory: talks/${{ matrix.talk }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Uses the pnpm version pinned in the talk's packageManager field.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: talks/${{ matrix.talk }}/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: talks/${{ matrix.talk }}/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium system dependencies
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Export PDF
+        run: pnpm run export
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.talk }}
+          path: talks/${{ matrix.talk }}/slides-export.pdf
+          if-no-files-found: error

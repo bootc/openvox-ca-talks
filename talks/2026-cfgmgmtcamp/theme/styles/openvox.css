@@ -1,0 +1,96 @@
+/*
+ * OpenVox palette. Ink and orange come from the OpenVox logos and hexagon
+ * sticker. Orange is too light for text on white, so use it for accents only.
+ */
+:root {
+  --ov-ink: #1d1d1b;
+  --ov-orange: #eb8521;
+  --ov-paper: #ffffff;
+  --ov-muted: #5c5c57;
+  --ov-code-bg: #f4f0ea;
+
+  --slidev-theme-primary: var(--ov-orange);
+}
+
+.slidev-layout {
+  color: var(--ov-ink);
+  background: var(--ov-paper);
+
+  h1 {
+    @apply text-4xl font-700 mb-6 -ml-[0.05em];
+  }
+
+  /* Short orange rule under slide titles. */
+  h1::after {
+    content: '';
+    @apply block w-16 h-1.5 mt-3 rounded-full;
+    background: var(--ov-orange);
+  }
+
+  h1 + p {
+    @apply -mt-2 mb-4;
+    color: var(--ov-muted);
+  }
+
+  h2 {
+    @apply text-3xl font-700;
+  }
+
+  h3 {
+    @apply text-2xl font-700;
+  }
+
+  p + h2, ul + h2, table + h2 {
+    @apply mt-10;
+  }
+
+  a {
+    color: inherit;
+    border-bottom: 2px solid var(--ov-orange);
+  }
+
+  li::marker {
+    color: var(--ov-orange);
+  }
+
+  :not(pre) > code {
+    @apply px-1.5 py-0.5 rounded;
+    color: var(--ov-ink);
+    background: var(--ov-code-bg);
+  }
+
+  blockquote {
+    @apply pl-4 py-1;
+    color: var(--ov-ink);
+    border-left: 4px solid var(--ov-orange);
+    background: var(--ov-code-bg);
+  }
+}
+
+/* Dark slides: cover and end. */
+.slidev-layout.ov-dark {
+  color: var(--ov-paper);
+  background: var(--ov-ink);
+
+  h1 + p {
+    @apply opacity-75;
+    color: inherit;
+  }
+}
+
+/* Section dividers sit on solid orange, so the title rule turns ink. */
+.slidev-layout.section {
+  background: var(--ov-orange);
+
+  h1 {
+    @apply text-6xl;
+  }
+
+  h1::after {
+    background: var(--ov-ink);
+  }
+
+  a {
+    border-bottom-color: var(--ov-ink);
+  }
+}
