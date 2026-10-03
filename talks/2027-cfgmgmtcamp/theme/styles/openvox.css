@@ -44,6 +44,10 @@
     @apply mt-10;
   }
 
+  p + h3, ul + h3, table + h3 {
+    @apply mt-6;
+  }
+
   a {
     color: inherit;
     border-bottom: 2px solid var(--ov-orange);
@@ -93,4 +97,14 @@
   a {
     border-bottom-color: var(--ov-ink);
   }
+}
+
+/*
+ * No programming ligatures in code: Fira Code would otherwise draw `!=` as
+ * `≠` and `->` as an arrow, which misleads anyone copying from a slide.
+ */
+pre,
+code {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
 }
