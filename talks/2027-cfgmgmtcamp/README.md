@@ -1,4 +1,4 @@
-# openvox-ca: A Drop-In Puppet CA, Rewritten in Go
+# openvox-ca: A Drop-In Replacement for the OpenVox CA, Built to Scale
 
 - **Event:** CfgMgmtCamp 2027, Ghent
 - **Date:** 1 or 2 February 2027 (exact day TBC)

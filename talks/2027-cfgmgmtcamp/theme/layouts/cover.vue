@@ -4,11 +4,11 @@ import mark from '../assets/openvox-mark-white.svg?url'
 
 <!-- Title slide: ink background, content on the left, OpenVox mark on the right. -->
 <template>
-  <div class="slidev-layout cover ov-dark h-full grid grid-cols-[1fr_auto] items-center gap-12">
+  <div class="slidev-layout cover ov-dark h-full grid grid-cols-[1fr_auto] items-center gap-8">
     <div class="ov-cover-content">
       <slot />
     </div>
-    <img :src="mark" alt="OpenVox logo" class="h-72 w-auto">
+    <img :src="mark" alt="OpenVox logo" class="h-64 w-auto">
   </div>
 </template>
 

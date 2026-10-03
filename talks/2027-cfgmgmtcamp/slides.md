@@ -2,9 +2,9 @@
 # Deck-wide options. The slides themselves live in pages/, imported in order
 # by the src: entries below.
 theme: ./theme
-title: "openvox-ca: A Drop-In Puppet CA, Rewritten in Go"
+title: "openvox-ca: A Drop-In Replacement for the OpenVox CA, Built to Scale"
 info: |
-  ## openvox-ca: A Drop-In Puppet CA, Rewritten in Go
+  ## openvox-ca: A Drop-In Replacement for the OpenVox CA, Built to Scale
 
   Chris Boot and Trevor Vaughan.
   CfgMgmtCamp 2027.

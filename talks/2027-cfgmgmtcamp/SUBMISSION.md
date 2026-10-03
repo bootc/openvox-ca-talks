@@ -8,7 +8,7 @@ Proposal state: **confirmed** (accepted 29 September 2026, confirmed 30 Septembe
 
 _Maximum 200 characters._
 
-openvox-ca: A Drop-In Puppet CA, Rewritten in Go
+openvox-ca: A Drop-In Replacement for the OpenVox CA, Built to Scale
 
 ## Session type
 

@@ -4,7 +4,7 @@ layout: cover
 
 # openvox-ca
 
-## A Drop-In Puppet CA, Rewritten in Go
+## A Drop-In Replacement <br>for the OpenVox CA, Built to Scale
 
 <div class="mt-10 text-xl leading-relaxed">
 

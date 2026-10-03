@@ -1,6 +1,6 @@
 # openvox-ca talks
 
-Slide decks for conference talks about [openvox-ca](https://github.com/voxpupuli/openvox-ca), a drop-in replacement for the Puppet/OpenVox certificate authority, written in Go.
+Slide decks for conference talks about [openvox-ca](https://github.com/voxpupuli/openvox-ca), a drop-in replacement for the OpenVox/Puppet Server certificate authority, written in Go.
 
 ## Layout
 
@@ -70,7 +70,7 @@ PDFs aren't committed. On every push to `main` that changes anything in a talk's
 
 | Date | Event | Title | Slides | Recording |
 | ---- | ----- | ----- | ------ | --------- |
-| 1 or 2 Feb 2027 (TBC) | CfgMgmtCamp 2027 | openvox-ca: A Drop-In Puppet CA, Rewritten in Go | [talks/2027-cfgmgmtcamp](talks/2027-cfgmgmtcamp/) | — |
+| 1 or 2 Feb 2027 (TBC) | CfgMgmtCamp 2027 | openvox-ca: A Drop-In Replacement for the OpenVox CA, Built to Scale | [talks/2027-cfgmgmtcamp](talks/2027-cfgmgmtcamp/) | — |
 
 ## Licence
 
