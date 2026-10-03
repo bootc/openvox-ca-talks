@@ -30,9 +30,9 @@ flowchart LR
 - Separate CA server already? Agents need **no** changes. Single server today? Agents need `ca_server`
 
 <!--
-- Nothing new here architecturally: scaling OpenVox/Puppet beyond one server already means compilers with the CA service disabled (`certificate-authority-disabled-service` in `services.d/ca.cfg`) behind a load balancer, plus a single dedicated CA server. openvox-ca simply is that CA server.
+- Nothing new here architecturally: scaling OpenVox (or Puppet) beyond one server already means compilers with the CA service disabled (`certificate-authority-disabled-service` in `services.d/ca.cfg`) behind a load balancer, plus a single dedicated CA server. openvox-ca simply is that CA server.
 - Reference: Martin Alfke (betadots), "Scaling Puppet Infrastructure", dev.to, February 2024.
-- openvox-ca takes over every CA request on port 8140; catalogs, reports and PuppetDB are untouched.
+- openvox-ca takes over every CA request on port 8140; catalogs, reports and OpenVoxDB are untouched.
 - OpenVox Server and openvox-ca can't share a hostname and port, so the CA needs its own name or port. If you already run a separate CA server, openvox-ca takes over its hostname and port and agents don't notice. If you run a single OpenVox Server today, agents need `ca_server` (and `ca_port` if not 8140) in `puppet.conf`; that's a one-line change you can roll out with OpenVox itself before the cutover.
 - Admin tooling: `openvox-ca-ctl` mirrors `puppetserver ca`; the HTTP API is the same one `puppetserver ca` and `puppet ssl` use. OpenVox View (the web dashboard) can also sign, revoke and clean through it.
 Source: openvox-ca [`docs/migrating-from-puppet-server.md`](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md) (steps 6-7, "Agent configuration").
@@ -47,7 +47,7 @@ Source: openvox-ca [`docs/migrating-from-puppet-server.md`](https://github.com/v
 
 ### On the wire
 
-- The Puppet CA HTTP API: all 13 endpoints agents and OpenVox Server use
+- The same CA HTTP API: all 13 endpoints that agents and OpenVox Server use (Puppet's too)
 - Served at `/puppet-ca/v1/…`, as today
 - Same defaults as a stock `auth.conf`: status is admin-only, CSR alt names off
 - `openvox-ca-ctl` mirrors `puppetserver ca`
@@ -72,7 +72,7 @@ Source: openvox-ca [`docs/migrating-from-puppet-server.md`](https://github.com/v
 <!--
 **FIXME:** revisit once [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397) lands: the `ca_key.pem` and `inventory.txt` rows, and the title, should then say the directory is portable as-is.
 
-- The `filesystem` backend is the default and uses a Puppet-style cadir: certificates, CSRs and the CRL are the same files in the same places. Two differences today: the CA key lives in `private/`, and the `inventory.txt` lines are formatted differently, so migration is `openvox-ca-ctl import` plus rebuilding `inventory.txt` from `signed/`. Making the directory portable in both directions without an import is planned: [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397).
+- The `filesystem` backend is the default and uses an OpenVox Server-style cadir: certificates, CSRs and the CRL are the same files in the same places. Two differences today: the CA key lives in `private/`, and the `inventory.txt` lines are formatted differently, so migration is `openvox-ca-ctl import` plus rebuilding `inventory.txt` from `signed/`. Making the directory portable in both directions without an import is planned: [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397).
 - openvox-ca also adds a few files of its own (`.inventory.hmac`, `locks/`, `superseded.json`); OpenVox Server doesn't use them.
 - Endpoints are served on both the bare path and `/puppet-ca/v1`, so it also works behind a prefix-stripping proxy.
 - Authorisation defaults match OpenVox Server's shipped `auth.conf` (`certificate_status` is admin-only, via `pp_cli_auth` or the allow list) and `allow-subject-alt-names: false`.
@@ -115,7 +115,7 @@ flowchart LR
   - a **frontend**, which serves every request but never holds the key.
 - The frontend sends digests to the signer over a pre-connected Unix socketpair and gets signatures back. The two ends first do a mutual challenge-response using a per-start pre-shared key.
 - So a memory-disclosure bug in the HTTP layer can't leak the CA key: it isn't there. That holds in containers too: the published images and the Helm chart run the same three-process topology. `--single-process` collapses it into one and gives up the isolation; it's a debugging aid.
-- Storage backends share one contract: CA cert and key, CRL, inventory, CSRs and issued certificates. `filesystem` is the default (a Puppet-style cadir); the HA backends come in the next section.
+- Storage backends share one contract: CA cert and key, CRL, inventory, CSRs and issued certificates. `filesystem` is the default (an OpenVox Server-style cadir); the HA backends come in the next section.
 - Key custody: a plain file, a file encrypted at rest with AES-256-GCM, or an OpenBao Transit key that never leaves OpenBao.
 - Crypto is `crypto/x509` and `net/http` from the standard library, with cgo off, so the normal build is a single static binary.
 - FIPS at 1.0.0: separate `_fips` release tarballs for linux/amd64 and linux/arm64, built with `GOEXPERIMENT=boringcrypto`. BoringCrypto needs cgo, so these are dynamically linked. The release workflow checks every `_fips` artefact really is a BoringCrypto build. All storage backends work with it. No FIPS container image or deb/rpm package yet.
@@ -219,10 +219,10 @@ Tested end to end with real OpenVox 8 and 9 agents, OpenVox Server (CA disabled)
 - **Admin access:** the recommended way to grant admin is the CN allow list: `puppet_server` in the config file (or `--puppet-server`), fixed at startup; or, preferably, `puppet_server_file` with one CN per line, which is re-read on `SIGHUP`. Withdrawing a grant is editing a file and reloading.
   - `pp_cli_auth` is still fully supported for those who want it; we just no longer recommend it. Neither OpenVox Server nor openvox-ca will sign it from a CSR (OpenVox Server's `allowed-extension?` excludes it even with `allow-authorization-extensions`), so mint it offline with `openvox-ca generate --pp-cli-auth`. Withdrawing it means revoking every live serial for that subject and restarting.
   - `--no-pp-cli-auth` turns that path off entirely.
-- **Authorisation extensions:** OpenVox Server refuses a CSR carrying `ppAuthCertExt` extensions (`1.3.6.1.4.1.34380.1.3.*`, e.g. `pp_authorization`, `pp_auth_role`) unless `allow-authorization-extensions` is on, and then signs them. openvox-ca always strips them and signs the rest, with a `WARN`. It also drops extensions outside Puppet's arcs, where OpenVox Server refuses the CSR.
+- **Authorisation extensions:** OpenVox Server refuses a CSR carrying `ppAuthCertExt` extensions (`1.3.6.1.4.1.34380.1.3.*`, e.g. `pp_authorization`, `pp_auth_role`) unless `allow-authorization-extensions` is on, and then signs them. openvox-ca always strips them and signs the rest, with a `WARN`. It also drops extensions outside Puppet's OID arcs (which OpenVox still uses), where OpenVox Server refuses the CSR.
 - **Renewal:** re-reads the CRL from storage, so revoking can't be outrun by renewing on a replica that hasn't synced yet.
 - None of these changes a stock deployment; they bite only where something had been relaxed.
-- `test:puppet` (`test/compose-puppet.yml`) runs OpenVox Server with its CA disabled, an OpenVox agent and OpenVoxDB, and checks catalog compilation, PuppetDB reporting, exported resources and CRL revocation through openvox-ca with genuine TLS.
+- `test:puppet` (`test/compose-puppet.yml`) runs OpenVox Server with its CA disabled, an OpenVox agent and OpenVoxDB, and checks catalog compilation, OpenVoxDB reporting, exported resources and CRL revocation through openvox-ca with genuine TLS.
 
 Sources: [Migration guide: differences to be aware of](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#differences-to-be-aware-of), [authorisation parity](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#authorisation-parity); [Configuration](https://github.com/voxpupuli/openvox-ca/blob/main/docs/configuration.md); [Testing](https://github.com/voxpupuli/openvox-ca/blob/main/docs/development/testing.md).
 -->
@@ -252,7 +252,7 @@ flowchart LR
 ```
 
 - Any replica can sign, revoke and refresh the CRL; distributed locks keep them in step
-- Revocations reach every replica within a minute; the CRL agents download is always current
+- Revocations reach every replica within a minute, through the CRL and the built-in OCSP responder
 - `openvox-ca-ctl migrate` moves a CA between backends
 - Each replica sizes itself to its cgroup: signing concurrency from the CPU limit, Go memory limits from the memory limit
 
@@ -261,6 +261,7 @@ flowchart LR
 - Coordination is automatic, per backend: PostgreSQL advisory locks, MySQL `GET_LOCK`, etcd lease-backed mutexes, Redis locks. A crashed replica's locks are released when its session or lease ends.
 - The CRL agents download is served straight from storage. What lags is each replica's own revocation verdicts (client certificates it accepts, OCSP answers): reloaded every `crl_sync_interval_sec` (60 s). The OCSP serial index reloads every `ocsp_index_sync_interval_sec` (5 min).
 - The load balancer must pass TLS through: the CA does its own mTLS.
+- **OCSP:** a built-in RFC 6960 responder (`POST /ocsp`, `GET /ocsp/{request}`) for verifiers that prefer it to CRLs; OpenVox agents use the CRL. Issued certificates advertise it only when `ocsp_url` is set. Responses are cached, with nonce support. Mention it, but don't push it: the web PKI is moving away from OCSP towards CRLs, so it's there for those who need it. See [HTTP API: OCSP](https://github.com/voxpupuli/openvox-ca/blob/main/docs/api.md#ocsp).
 - `migrate` copies the CA cert and key, CRL, inventory and every issued certificate; it isn't transactional, so back up first.
 - **Sizing to the cgroup** (containers and systemd alike): the signing-concurrency default follows the CPU limit via Go's `GOMAXPROCS`; set it explicitly with OpenBao.
 - The launcher splits the cgroup memory limit into a `GOMEMLIMIT` per process, so the three processes don't each claim the whole budget.
@@ -272,10 +273,10 @@ Sources: [Configuration: bounding CA-key signing](https://github.com/voxpupuli/o
 
 # Keep the key out of the CA
 
-<div class="grid grid-cols-[2fr_3fr] gap-10 items-center">
+<div class="grid grid-cols-[2fr_3fr] gap-8 items-center">
 <div>
 
-```mermaid {scale: 0.75}
+```mermaid {scale: 0.65}
 flowchart LR
   ca["openvox-ca<br/>no CA key"] -- "digest" --> bao["OpenBao Transit<br/>CA key"]:::accent
   bao -. "signature" .-> ca
@@ -291,13 +292,12 @@ flowchart LR
 - Works with every storage backend: it only replaces key custody
 - [OpenBao](https://openbao.org/) is the community fork of HashiCorp Vault, an OpenSSF (Linux Foundation) project. It aims to stay API-compatible, so Vault should work too
 
-</div>
-</div>
-
-<div class="mt-8 text-lg" style="color: var(--ov-muted)">
+<div class="mt-4 text-lg" style="color: var(--ov-muted)">
 
 The trade-off: OpenBao's availability becomes the CA's.
 
+</div>
+</div>
 </div>
 
 <!--
@@ -341,7 +341,7 @@ kubernetes_export:
     - kind: Secret
       metadata:
         name: openvox-ca-trust
-        namespace: puppet
+        namespace: openvox
       cert: true
       crl: true
 ```
@@ -383,6 +383,8 @@ puppetca_leaf_certificate_not_after_timestamp_seconds{state!="revoked"} - time()
 ```
 
 <!--
+**FIXME:** metric names still use the `puppetca_` prefix; [#349](https://github.com/voxpupuli/openvox-ca/issues/349) (1.0.0 milestone) renames metrics and the mixin's `PuppetCA*` alerts. Update the two example queries on this slide and the names in these notes once it lands.
+
 - Enable with `metrics_listen` (e.g. `127.0.0.1:9140`). Plain HTTP on a separate listener, served by the frontend process. Leaf metrics carry hostnames as labels, so keep it on loopback or a management network.
 - Series to call out: `puppetca_ca_certificate_not_after_timestamp_seconds`, `puppetca_crl_next_update_timestamp_seconds`, `puppetca_leaf_certificate_not_after_timestamp_seconds`, `puppetca_ca_signing_in_flight` / `_shed_total`, `puppetca_crl_cached_number` (a replica's CRL behind the stored one).
 - The mixin's alerts cover exporter health, CA/CRL/leaf expiry, pending requests, CRL update and sync failures, OCSP index sync, delayed revocations, the upstream CRL chain, client trust domains, and Kubernetes export failures. Thresholds are configurable.
