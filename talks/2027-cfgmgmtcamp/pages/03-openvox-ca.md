@@ -90,6 +90,7 @@ Sources: [README: Features](https://github.com/voxpupuli/openvox-ca/blob/main/RE
 # Inside openvox-ca
 
 ```mermaid {scale: 0.8}
+%%{init: {'themeVariables': {'edgeLabelBackground': '#f4f0ea'}}}%%
 flowchart LR
   net(["agents, tools"]) --> fe
   subgraph proc ["openvox-ca"]
@@ -271,7 +272,10 @@ Sources: [Configuration: bounding CA-key signing](https://github.com/voxpupuli/o
 
 # Keep the key out of the CA
 
-```mermaid {scale: 0.6}
+<div class="grid grid-cols-[2fr_3fr] gap-10 items-center">
+<div>
+
+```mermaid {scale: 0.75}
 flowchart LR
   ca["openvox-ca<br/>no CA key"] -- "digest" --> bao["OpenBao Transit<br/>CA key"]:::accent
   bao -. "signature" .-> ca
@@ -279,10 +283,16 @@ flowchart LR
   classDef accent fill:#eb8521,stroke:#1d1d1b,stroke-width:2px,font-weight:bold
 ```
 
+</div>
+<div>
+
 - The key never exists in any openvox-ca process, on any host
 - Authenticates with AppRole or a token on a VM, or a Kubernetes ServiceAccount in a cluster
 - Works with every storage backend: it only replaces key custody
 - [OpenBao](https://openbao.org/) is the community fork of HashiCorp Vault, an OpenSSF (Linux Foundation) project. It aims to stay API-compatible, so Vault should work too
+
+</div>
+</div>
 
 <div class="mt-8 text-lg" style="color: var(--ov-muted)">
 
