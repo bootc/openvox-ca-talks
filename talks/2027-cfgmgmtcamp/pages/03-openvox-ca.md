@@ -233,3 +233,150 @@ layout: section
 # Features at scale
 
 <!-- HA storage, OpenBao, Kubernetes export, metrics. -->
+
+---
+
+# Scale out
+
+```mermaid {scale: 0.7}
+flowchart LR
+  agents["agents"] --> lb["load balancer<br/>TLS passthrough"]
+  lb --> r1["openvox-ca"]:::accent
+  lb --> r2["openvox-ca"]:::accent
+  lb --> r3["openvox-ca"]:::accent
+  r1 --> db[("PostgreSQL, MySQL,<br/>etcd or Redis/Valkey")]
+  r2 --> db
+  r3 --> db
+  classDef accent fill:#eb8521,stroke:#1d1d1b,stroke-width:2px,font-weight:bold
+```
+
+- Any replica can sign, revoke and refresh the CRL; distributed locks keep them in step
+- Revocations reach every replica within a minute; the CRL agents download is always current
+- `openvox-ca-ctl migrate` moves a CA between backends
+- Each replica sizes itself to its cgroup: signing concurrency from the CPU limit, Go memory limits from the memory limit
+
+<!--
+- Single-node backends: `filesystem` (the default) and `sqlite`. Shared, multi-replica backends: `postgres`, `mysql` (incl. MariaDB), `etcd`, `redis` (incl. Valkey, direct or Sentinel). All pure Go, so the static and FIPS builds work with every one.
+- Coordination is automatic, per backend: PostgreSQL advisory locks, MySQL `GET_LOCK`, etcd lease-backed mutexes, Redis locks. A crashed replica's locks are released when its session or lease ends.
+- The CRL agents download is served straight from storage. What lags is each replica's own revocation verdicts (client certificates it accepts, OCSP answers): reloaded every `crl_sync_interval_sec` (60 s). The OCSP serial index reloads every `ocsp_index_sync_interval_sec` (5 min).
+- The load balancer must pass TLS through: the CA does its own mTLS.
+- `migrate` copies the CA cert and key, CRL, inventory and every issued certificate; it isn't transactional, so back up first.
+- **Sizing to the cgroup** (containers and systemd alike): the signing-concurrency default follows the CPU limit via Go's `GOMAXPROCS`; set it explicitly with OpenBao.
+- The launcher splits the cgroup memory limit into a `GOMEMLIMIT` per process, so the three processes don't each claim the whole budget.
+
+Sources: [Configuration: bounding CA-key signing](https://github.com/voxpupuli/openvox-ca/blob/main/docs/configuration.md#bounding-ca-key-signing), [memory budget](https://github.com/voxpupuli/openvox-ca/blob/main/docs/configuration.md#memory-budget); [Storage backends](https://github.com/voxpupuli/openvox-ca/blob/main/docs/storage-backends.md); [Storage internals: cross-node coordination](https://github.com/voxpupuli/openvox-ca/blob/main/docs/development/storage-internals.md); [Configuration: revocation across replicas](https://github.com/voxpupuli/openvox-ca/blob/main/docs/configuration.md#revocation-across-replicas).
+-->
+
+---
+
+# Keep the key out of the CA
+
+```mermaid {scale: 0.6}
+flowchart LR
+  ca["openvox-ca<br/>no CA key"] -- "digest" --> bao["OpenBao Transit<br/>CA key"]:::accent
+  bao -. "signature" .-> ca
+  ca --> store[("storage<br/>certs, CRL, inventory")]
+  classDef accent fill:#eb8521,stroke:#1d1d1b,stroke-width:2px,font-weight:bold
+```
+
+- The key never exists in any openvox-ca process, on any host
+- Authenticates with AppRole or a token on a VM, or a Kubernetes ServiceAccount in a cluster
+- Works with every storage backend: it only replaces key custody
+- [OpenBao](https://openbao.org/) is the community fork of HashiCorp Vault, an OpenSSF (Linux Foundation) project. It aims to stay API-compatible, so Vault should work too
+
+<div class="mt-8 text-lg" style="color: var(--ov-muted)">
+
+The trade-off: OpenBao's availability becomes the CA's.
+
+</div>
+
+<!--
+- Set `ca_key_provider: openbao` and `openbao.key_name` alongside the existing `storage_backend`; the CA certificate, CSRs, CRL and inventory still live in storage.
+- Kubernetes auth is native: no Vault Agent sidecar.
+- It plugs into the same key-custody seam as the isolated signer; PKCS#11/HSM support is planned on the same seam.
+- Operational trade-off:
+  - OpenBao must be reachable at startup, or the CA exits rather than start unable to sign.
+  - While it's unreachable, signing fails; the CA re-authenticates every ~5 s and recovers without a restart.
+  - Every signature is a network round trip. Set `ca_signing_concurrency` to what the Transit key can sustain (and remember it's per replica); `/ocsp` is unauthenticated and signs on a cache miss.
+- OpenBao describes itself as a community-driven fork of Vault "managed by the Linux Foundation's OpenSSF", where it's a Sandbox project. OpenBao states it "intends to remain API compatible with HashiCorp Vault" ([API libraries](https://openbao.org/docs/api/libraries/)). openvox-ca is built and tested against OpenBao and intends to work with Vault through the same Transit API and auth methods, but Vault isn't in its test matrix.
+
+Sources: [OpenBao Transit-engine CA key](https://github.com/voxpupuli/openvox-ca/blob/main/docs/openbao-transit.md), including [performance and outage behaviour](https://github.com/voxpupuli/openvox-ca/blob/main/docs/openbao-transit.md#performance-and-outage-behaviour); [CA key security](https://github.com/voxpupuli/openvox-ca/blob/main/docs/ca-key-security.md).
+-->
+
+---
+
+# At home in Kubernetes
+
+<div class="grid grid-cols-2 gap-10">
+<div>
+
+### Helm chart
+
+- Signed OCI artefact, versioned with the server
+- Ingress and Gateway API routes with TLS passthrough
+- Opt-in `ServiceMonitor` and network policies
+
+### Managed certificates <span class="text-base font-400" style="color: var(--ov-muted)">(1.0)</span>
+
+- Issues and renews certificates for OpenVox Server, OpenVoxDB and OpenVox View straight into Secrets: no hand-signing
+
+</div>
+<div>
+
+### Export to Secrets and ConfigMaps
+
+```yaml
+kubernetes_export:
+  targets:
+    - kind: Secret
+      metadata:
+        name: openvox-ca-trust
+        namespace: puppet
+      cert: true
+      crl: true
+```
+
+An Ingress or Gateway can then verify client certificates against openvox-ca, and picks up every CRL change automatically
+
+</div>
+</div>
+
+<!--
+**FIXME:** confirm managed certificates ([#243](https://github.com/voxpupuli/openvox-ca/issues/243), PR #336, 1.0.0 milestone) landed before the talk; if not, present them as coming next.
+
+- **Why export:** publish the CA certificate and CRL where cluster workloads consume trust. An Ingress or Gateway validating client certificates (mTLS at the edge) can reference the Secret directly; the default data keys `ca.crt` and `ca.crl` are what ingress-nginx's client-certificate auth expects. Every revocation re-applies the Secret, so the edge enforces it without anyone copying files.
+- **Managed certificates** ([#243](https://github.com/voxpupuli/openvox-ca/issues/243), building on [#242](https://github.com/voxpupuli/openvox-ca/issues/242)): declare `managed_certs` entries (certname, extra names, TTL, `renew_before`) and the CA issues and renews each into a Secret in the component's namespace with `tls.crt`, `tls.key` and `ca.crt`. The Secret is the only copy of the private key. Goal: bring up OpenVox Server, OpenVoxDB and OpenVox View in Kubernetes without hand-issuing, converting and renewing certificates. It isn't a general-purpose cluster CA.
+- Chart: `helm install openvox-ca oci://ghcr.io/voxpupuli/openvox-ca-charts/openvox-ca`. Signed and attested like the images (verify with `cosign`). Dual-stack Services. Server settings pass straight through to the config file, so every option is reachable.
+- Default is the filesystem backend on a PVC, kept on `helm uninstall`; for replicas, switch to a shared backend and turn persistence off.
+- Kubernetes export publishes the CA certificate and/or CRL into any number of Secrets or ConfigMaps, via in-cluster server-side apply. Other workloads mount them as a trust bundle or for CRL checks, with no HTTP fetches or shared volumes.
+  - Names, namespaces, data keys, labels, annotations and Secret `type` are configurable; `cert_scope`/`crl_scope` choose how much of the chain to publish.
+  - Reconciled at startup and whenever the CRL changes (revoke, reissue, refresh, cleanup). Safe from every replica, thanks to server-side apply.
+  - In-cluster ServiceAccount only; PEM only; objects aren't deleted when a target is removed.
+
+Sources: [Deploying with Helm](https://github.com/voxpupuli/openvox-ca/blob/main/docs/helm-chart.md); [Kubernetes export](https://github.com/voxpupuli/openvox-ca/blob/main/docs/kubernetes-export.md).
+-->
+
+---
+
+# Know before it breaks
+
+- **Prometheus exporter** on its own listener: CA and CRL expiry, every leaf certificate's expiry and status, pending CSRs, signing load, replica sync
+- **Alerting mixin** in Jsonnet: 28 ready-made alerts
+- **Health probes** for Kubernetes; `systemd` readiness, status line and watchdog on VMs
+
+```text
+# Days until the CA certificate expires
+(puppetca_ca_certificate_not_after_timestamp_seconds - time()) / 86400
+
+# Non-revoked leaf certificates expiring within 7 days
+puppetca_leaf_certificate_not_after_timestamp_seconds{state!="revoked"} - time() < 7 * 86400
+```
+
+<!--
+- Enable with `metrics_listen` (e.g. `127.0.0.1:9140`). Plain HTTP on a separate listener, served by the frontend process. Leaf metrics carry hostnames as labels, so keep it on loopback or a management network.
+- Series to call out: `puppetca_ca_certificate_not_after_timestamp_seconds`, `puppetca_crl_next_update_timestamp_seconds`, `puppetca_leaf_certificate_not_after_timestamp_seconds`, `puppetca_ca_signing_in_flight` / `_shed_total`, `puppetca_crl_cached_number` (a replica's CRL behind the stored one).
+- The mixin's alerts cover exporter health, CA/CRL/leaf expiry, pending requests, CRL update and sync failures, OCSP index sync, delayed revocations, the upstream CRL chain, client trust domains, and Kubernetes export failures. Thresholds are configurable.
+- `/healthz/live`, `/healthz/ready`, `/healthz/startup`. Under systemd: `Type=notify`, a live status line (listener, CA expiry, CRL freshness) and watchdog keep-alives.
+
+Sources: [Metrics & monitoring](https://github.com/voxpupuli/openvox-ca/blob/main/docs/metrics.md); [alerting mixin](https://github.com/voxpupuli/openvox-ca/blob/main/mixin/); [Running under systemd](https://github.com/voxpupuli/openvox-ca/blob/main/docs/systemd.md).
+-->
