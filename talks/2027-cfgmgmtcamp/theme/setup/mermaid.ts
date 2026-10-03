@@ -7,6 +7,18 @@ export default defineMermaidSetup(() => ({
   securityLevel: 'loose',
   // Styles inside the SVG, so they apply when Mermaid measures labels too.
   themeCSS: `
+    /*
+     * Breathing room between edge lines and their labels. Mermaid caps edge
+     * labels at 200px whatever wrappingWidth says, so lift that cap too or the
+     * padding makes longer labels wrap.
+     */
+    .edgeLabel p,
+    span.edgeLabel {
+      padding: 0 0.4em;
+    }
+    .labelBkg {
+      max-width: none !important;
+    }
     code {
       font-family: 'Fira Code', monospace;
       font-size: 0.9em;
@@ -17,6 +29,8 @@ export default defineMermaidSetup(() => ({
     }
   `,
   // Wider than the default 200px, so short labels don't wrap word by word.
+  // Mermaid 12 lays out with ELK by default, which ignores dagre-only options
+  // such as rankSpacing and curve.
   flowchart: { wrappingWidth: 400 },
   themeVariables: {
     fontFamily: 'Lato, sans-serif',

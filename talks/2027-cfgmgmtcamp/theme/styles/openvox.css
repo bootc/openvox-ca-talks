@@ -108,3 +108,9 @@ code {
   font-variant-ligatures: none;
   font-feature-settings: 'liga' 0, 'calt' 0;
 }
+
+/* Centre Mermaid diagrams horizontally on the slide. */
+.slidev-layout .mermaid {
+  display: flex;
+  justify-content: center;
+}
