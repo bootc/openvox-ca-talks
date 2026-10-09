@@ -1,8 +1,8 @@
 # openvox-ca: A Drop-In Replacement for the OpenVox CA, Built to Scale
 
-- **Event:** CfgMgmtCamp 2027, Ghent
+- **Event:** [CfgMgmtCamp 2027](https://cfgmgmtcamp.org/ghent2027/), Ghent
 - **Date:** 1 or 2 February 2027 (exact day TBC)
-- **Speakers:** Chris Boot and Trevor Vaughan
+- **Speakers:** [Chris Boot](https://github.com/bootc/) and [Trevor Vaughan](https://github.com/trevor-vaughan/)
 - **Track:** Vox/Puppet
 
 **Status:** Accepted and confirmed for CfgMgmtCamp 2027 as a Short Talk (25 minutes). Day and time TBC.
