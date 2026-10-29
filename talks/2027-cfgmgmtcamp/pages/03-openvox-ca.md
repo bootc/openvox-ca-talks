@@ -40,7 +40,7 @@ Source: openvox-ca [`docs/migrating-from-puppet-server.md`](https://github.com/v
 
 ---
 
-# Same wire, familiar disk
+# Same wire, same disk
 
 <div class="grid grid-cols-2 gap-12">
 <div>
@@ -62,27 +62,27 @@ Source: openvox-ca [`docs/migrating-from-puppet-server.md`](https://github.com/v
 | --- | --- |
 | `ca_crt.pem`, `ca_crl.pem` | same |
 | `requests/`, `signed/` | same |
-| `ca_key.pem` | `private/ca_key.pem` |
-| `inventory.txt` | rebuilt on import |
-| `serial` | not used |
+| `ca_key.pem` | same |
+| `inventory.txt` | same format |
+| `serial` | left alone |
 
 </div>
 </div>
 
 <!--
-**FIXME:** revisit once [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397) lands: the `ca_key.pem` and `inventory.txt` rows, and the title, should then say the directory is portable as-is.
-
-- The `filesystem` backend is the default and uses an OpenVox Server-style cadir: certificates, CSRs and the CRL are the same files in the same places. Two differences today: the CA key lives in `private/`, and the `inventory.txt` lines are formatted differently, so migration is `openvox-ca-ctl import` plus rebuilding `inventory.txt` from `signed/`. Making the directory portable in both directions without an import is planned: [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397).
-- openvox-ca also adds a few files of its own (`.inventory.hmac`, `locks/`, `superseded.json`); OpenVox Server doesn't use them.
+- The `filesystem` backend (the default) reads and writes an OpenVox Server cadir as it stands ([#399](https://github.com/voxpupuli/openvox-ca/pull/399), merged for 1.0): the CA key at `ca_key.pem`, and `inventory.txt` as OpenVox Server wrote it, revoked and expired history included, so revoking by name works for certificates OpenVox Server issued. New lines are appended in OpenVox Server's own format; nothing existing is rewritten.
+- openvox-ca adds what it needs beside OpenVox Server's files (`.inventory.hmac`, `private/`, `locks/`); OpenVox Server ignores them. It leaves `serial` and the `infra_*` files alone, so OpenVox Server carries on from its own counter if the directory is handed back.
+- It has to run as OpenVox Server's user (`puppet`), which the shipped systemd unit and packages already do.
+- The responses on `/puppet-ca/v1` are checked in CI against a contract recorded from a real OpenVox Server ([#415](https://github.com/voxpupuli/openvox-ca/pull/415)); the remaining differences are listed in the API docs.
 - Endpoints are served on both the bare path and `/puppet-ca/v1`, so it also works behind a prefix-stripping proxy.
 - Authorisation defaults match OpenVox Server's shipped `auth.conf` (`certificate_status` is admin-only, via `pp_cli_auth` or the allow list) and `allow-subject-alt-names: false`.
 - CLI mapping: `list`, `sign`, `revoke`, `clean`, `setup`, `import`, `generate` all have `openvox-ca-ctl` equivalents.
 - **Autosigning**, compared with OpenVox Server's `certificate_authority.clj`:
   - Same: `false`/`true`/allow-list file/executable, chosen by the execute bit; the executable gets the certname as `argv[1]` and the CSR on stdin, exit 0 signs; the allow-list takes exact names, `*` and `*.domain` globs (any depth), ignores blank and `#` lines, and is re-read per CSR. SAN policy still applies to autosigned CSRs.
-  - Extra: a 30 s timeout on the executable (OpenVox Server sets none); refuses a world-writable or foreign-owned executable at startup and logs its SHA-256; a sanitised environment; a warning for exit codes ≥ 126; wildcards anywhere in a pattern; works on any HA replica.
+  - Extra: a 30 s timeout on the executable (OpenVox Server sets none); checks the executable's whole path, every directory and symlink, with OpenSSH `StrictModes` rules at startup and before every run ([#520](https://github.com/voxpupuli/openvox-ca/pull/520)), and logs its SHA-256; a sanitised environment; a warning for exit codes ≥ 126; wildcards anywhere in a pattern; works on any HA replica.
   - Gaps today: the executable doesn't get OpenVox Server's environment (`RUBYLIB`/`GEM_PATH`, secrets in env); its stdout/stderr isn't logged and ordinary rejections aren't either; `*.example.com` doesn't match bare `example.com` and globs are case-sensitive; a missing autosign file stops startup instead of meaning "off". The configuration lives in openvox-ca's own config (`autosign_config`), not `puppet.conf`, and defaults to off.
 
-Sources: [README: Features](https://github.com/voxpupuli/openvox-ca/blob/main/README.md#features); [HTTP API reference](https://github.com/voxpupuli/openvox-ca/blob/main/docs/api.md); [Migration guide: directory layout mapping](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#directory-layout-mapping), [CLI command mapping](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#cli-command-mapping); [Storage backends: filesystem](https://github.com/voxpupuli/openvox-ca/blob/main/docs/storage-backends.md#filesystem-backend-default).
+Sources: [README: Features](https://github.com/voxpupuli/openvox-ca/blob/main/README.md#features); [HTTP API reference](https://github.com/voxpupuli/openvox-ca/blob/main/docs/api.md); [Migration guide: directory layout mapping](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#directory-layout-mapping), [CLI command mapping](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#cli-command-mapping); [Storage backends: filesystem](https://github.com/voxpupuli/openvox-ca/blob/main/docs/storage-backends.md#filesystem-backend-default), [sharing the cadir with OpenVox Server](https://github.com/voxpupuli/openvox-ca/blob/main/docs/storage-backends.md#sharing-the-cadir-with-openvox-server); [HTTP API: differences from OpenVox Server](https://github.com/voxpupuli/openvox-ca/blob/main/docs/api.md#differences-from-openvox-server).
 -->
 
 ---
@@ -118,6 +118,7 @@ flowchart LR
 - Storage backends share one contract: CA cert and key, CRL, inventory, CSRs and issued certificates. `filesystem` is the default (an OpenVox Server-style cadir); the HA backends come in the next section.
 - Key custody: a plain file, a file encrypted at rest with AES-256-GCM, or an OpenBao Transit key that never leaves OpenBao.
 - Crypto is `crypto/x509` and `net/http` from the standard library, with cgo off, so the normal build is a single static binary.
+- Ways to install, as of 1.0: release tarballs (with SBOMs and signed provenance), multi-arch container images, the Helm chart, and now `.deb` and `.rpm` packages published from the release workflow ([#282](https://github.com/voxpupuli/openvox-ca/pull/282), [#266](https://github.com/voxpupuli/openvox-ca/pull/266)) that install a systemd unit running as `puppet` and provision a CA on first start. Distribution-specific polish is still in progress (Debian [#251](https://github.com/voxpupuli/openvox-ca/issues/251), EL [#557](https://github.com/voxpupuli/openvox-ca/pull/557)); no FIPS packages yet.
 - FIPS at 1.0.0: separate `_fips` release tarballs for linux/amd64 and linux/arm64, built with `GOEXPERIMENT=boringcrypto`. BoringCrypto needs cgo, so these are dynamically linked. The release workflow checks every `_fips` artefact really is a BoringCrypto build. All storage backends work with it. No FIPS container image or deb/rpm package yet.
 - Planned, not on the 1.0.0 milestone ([#329](https://github.com/voxpupuli/openvox-ca/issues/329)): move to Go's native FIPS 140-3 module, building with `GOFIPS140=certified` ([#330](https://github.com/voxpupuli/openvox-ca/issues/330)). No cgo, so the FIPS binary becomes static too, which makes a FIPS image ([#328](https://github.com/voxpupuli/openvox-ca/issues/328)) and `openvox-ca-fips` packages ([#333](https://github.com/voxpupuli/openvox-ca/issues/333)) cheap.
   - The Go Cryptographic Module holds CMVP certificate #5247 (FIPS 140-3, Level 1, active, sunset 2031-04-26); BoringCrypto's #4735 sunsets in 2029. Statuses as researched on 2026-09-11 ([#318](https://github.com/voxpupuli/openvox-ca/issues/318)): **check again before quoting**.
@@ -127,45 +128,6 @@ flowchart LR
 Sources: [CA key security: process isolation](https://github.com/voxpupuli/openvox-ca/blob/main/docs/ca-key-security.md#process-isolation), [key encryption at rest](https://github.com/voxpupuli/openvox-ca/blob/main/docs/ca-key-security.md#ca-key-encryption-at-rest); [OpenBao Transit-engine CA key](https://github.com/voxpupuli/openvox-ca/blob/main/docs/openbao-transit.md); [Storage backends](https://github.com/voxpupuli/openvox-ca/blob/main/docs/storage-backends.md); [Storage internals: backend contract](https://github.com/voxpupuli/openvox-ca/blob/main/docs/development/storage-internals.md#backend-contract); [Building, including FIPS](https://github.com/voxpupuli/openvox-ca/blob/main/CONTRIBUTING.md#building).
 -->
 
----
-
-# Migrating in six steps
-
-<div class="grid grid-cols-2 gap-12">
-<div>
-
-1. Back up the existing CA directory
-2. `openvox-ca-ctl import` the CA cert, key and CRL
-3. Copy signed certificates and rebuild the inventory
-4. Disable the CA service in OpenVox Server (and set `ca_server` on agents, if it was a single server)
-5. Start openvox-ca with its own TLS certificate
-6. Run `puppet agent --test` and check
-
-</div>
-<div>
-
-**Rollback:** restore the backup and switch the CA service back on.
-
-The migration is tested against a CA created by a real OpenVox Server.
-
-</div>
-</div>
-
-<!--
-**FIXME:** replace this slide with the hidden "Migrating in four steps" slide that follows once [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397) lands: unhide that one (remove `hide: true`) and hide or delete this one.
-
-- Needs a short maintenance window: no new signing while the CA moves.
-- `openvox-ca-ctl import` takes the CA certificate as a full chain (nearest first) and an optional CRL chain. Only `X509 CRL` blocks are accepted, because the CRL is served to every agent.
-- Step 3 exists because the inventory line format differs today ([voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397)). Rebuilding from `signed/` loses OpenVox Server's history of revoked and expired entries.
-- Step 4: a single OpenVox Server can't share its hostname and port with openvox-ca, so agents need `ca_server` (and `ca_port` if not 8140). Roll that out with OpenVox before the cutover.
-- Step 5: `openvox-ca generate` mints the CA's own serving certificate offline, before the server starts.
-- The migration suite (`test/compose-migration.yml`) starts `voxpupuli/puppetserver`, lets it create a genuine CA, imports it, and checks that old certificates fetch, new ones sign, and migrated ones revoke and clean. It doesn't test rollback.
-
-Sources: [Migration guide](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md), including [rollback](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#rollback); [Testing: `test:migration`](https://github.com/voxpupuli/openvox-ca/blob/main/docs/development/testing.md).
--->
-
----
-hide: true
 ---
 
 # Migrating in four steps
@@ -183,20 +145,23 @@ hide: true
 
 **Rollback:** stop openvox-ca and switch OpenVox Server's CA back on. Same directory, no changes.
 
-**Coming back:** reset the inventory integrity file first.
+**Coming back:** run `openvox-ca rebuild-inventory-hmac` first, if OpenVox Server signed anything meanwhile.
+
+The whole round trip is tested in CI against a real OpenVox Server.
 
 </div>
 </div>
 
 <!--
-**FIXME:** draft for after [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397) lands. Check the steps against the updated migration guide, then unhide this slide and retire "Migrating in six steps".
+- openvox-ca reads and writes the OpenVox Server cadir as-is ([#399](https://github.com/voxpupuli/openvox-ca/pull/399), merged for 1.0): `cadir` points at the existing directory (`/etc/puppetlabs/puppet/ssl/ca` or `/etc/puppetlabs/puppetserver/ca`). There's nothing to import or rebuild. Importing into a separate directory is still an option.
+- openvox-ca runs as `puppet`, the same user as OpenVox Server, so both can read the key and inventory; the shipped systemd unit and packages already do.
+- Step 2: a single OpenVox Server can't share its hostname and port with openvox-ca, so agents need `ca_server` (and `ca_port` if not 8140). Roll that out with OpenVox before the cutover.
+- Step 3: the CA can now issue and renew its own serving certificate (`serving_cert`, [#344](https://github.com/voxpupuli/openvox-ca/pull/344)); `openvox-ca generate` still mints one offline if you prefer.
+- Rollback changes nothing in the directory: stop openvox-ca, re-enable the CA service, undo `ca_server`. Delayed revocations still pending in `superseded.json` don't carry over.
+- Coming back after OpenVox Server has signed: OpenVox Server appends to `inventory.txt` without updating openvox-ca's integrity value, so `openvox-ca rebuild-inventory-hmac` re-seals it ([#312](https://github.com/voxpupuli/openvox-ca/pull/312)). It reports first and needs `--yes-re-bless` to write; check the inventory against a copy kept at hand-back.
+- CI: `test/roundtrip` hands one cadir between OpenVox Server's CA and openvox-ca four times; each side issues, revokes and cleans by name certificates the other issued, and `inventory.txt` must only grow, in OpenVox Server's format.
 
-- openvox-ca reads and writes the OpenVox Server cadir as-is: CA key at `ca_key.pem`, and inventory lines in OpenVox Server's format.
-- Step 3: point `cadir` at the existing directory (e.g. `/etc/puppetlabs/puppetserver/ca`), or copy it to the openvox-ca host.
-- Rollback needs no changes to the directory. That's a hard requirement in #397, because it's the escape hatch.
-- Coming back after OpenVox Server has signed or revoked anything: remove or rebuild `.inventory.hmac` first, because OpenVox Server appends to `inventory.txt` without updating it.
-
-Source: [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issues/397), "Acceptance criteria".
+Sources: [Migration guide](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md), including [rollback](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#rollback); [Operator CLI: `rebuild-inventory-hmac`](https://github.com/voxpupuli/openvox-ca/blob/main/docs/operator-cli.md#rebuild-inventory-hmac-re-asserting-inventory-integrity); [Testing](https://github.com/voxpupuli/openvox-ca/blob/main/docs/development/testing.md).
 -->
 
 ---
@@ -210,18 +175,19 @@ Source: [voxpupuli/openvox-ca#397](https://github.com/voxpupuli/openvox-ca/issue
 
 <div class="mt-8 text-lg" style="color: var(--ov-muted)">
 
-Tested end to end with real OpenVox 8 and 9 agents, OpenVox Server (CA disabled) and OpenVoxDB.
+API checked against a contract recorded from OpenVox Server, and tested end to end with real OpenVox 8 and 9 agents, OpenVox Server (CA disabled) and OpenVoxDB.
 
 </div>
 
 <!--
-- **Serials:** the [CA/Browser Forum Baseline Requirements](https://cabforum.org/working-groups/server/baseline-requirements/requirements/) (§7.1) require non-sequential serial numbers containing at least 64 bits of output from a CSPRNG. They're written for public web PKI, but it's sound practice for any CA: unpredictable serials defeat attacks that rely on guessing the next certificate's contents. openvox-ca uses 128 random bits. The status API still returns a 64-bit `serial_number` for compatibility.
+- **Serials:** the [CA/Browser Forum Baseline Requirements](https://cabforum.org/working-groups/server/baseline-requirements/requirements/) (§7.1) require non-sequential serial numbers containing at least 64 bits of output from a CSPRNG. They're written for public web PKI, but it's sound practice for any CA: unpredictable serials defeat attacks that rely on guessing the next certificate's contents. openvox-ca uses 128 random bits. The status API sends `serial_number` as a JSON number, as OpenVox Server does ([#404](https://github.com/voxpupuli/openvox-ca/pull/404)); parsers that read JSON numbers as doubles (JavaScript, `jq` before 1.7) round a value that large, and `serial_number_format` offers a hex string instead.
 - **Admin access:** the recommended way to grant admin is the CN allow list: `puppet_server` in the config file (or `--puppet-server`), fixed at startup; or, preferably, `puppet_server_file` with one CN per line, which is re-read on `SIGHUP`. Withdrawing a grant is editing a file and reloading.
   - `pp_cli_auth` is still fully supported for those who want it; we just no longer recommend it. Neither OpenVox Server nor openvox-ca will sign it from a CSR (OpenVox Server's `allowed-extension?` excludes it even with `allow-authorization-extensions`), so mint it offline with `openvox-ca generate --pp-cli-auth`. Withdrawing it means revoking every live serial for that subject and restarting.
   - `--no-pp-cli-auth` turns that path off entirely.
 - **Authorisation extensions:** OpenVox Server refuses a CSR carrying `ppAuthCertExt` extensions (`1.3.6.1.4.1.34380.1.3.*`, e.g. `pp_authorization`, `pp_auth_role`) unless `allow-authorization-extensions` is on, and then signs them. openvox-ca always strips them and signs the rest, with a `WARN`. It also drops extensions outside Puppet's OID arcs (which OpenVox still uses), where OpenVox Server refuses the CSR.
 - **Renewal:** re-reads the CRL from storage, so revoking can't be outrun by renewing on a replica that hasn't synced yet.
 - None of these changes a stock deployment; they bite only where something had been relaxed.
+- The API contract suite ([#415](https://github.com/voxpupuli/openvox-ca/pull/415)) replays 54 fixtures recorded from OpenVox Server; each remaining difference carries an exception with its reason. Recent parity fixes: duplicate CSRs refused as OpenVox Server does ([#462](https://github.com/voxpupuli/openvox-ca/pull/462)), renewal recreating the original certificate ([#471](https://github.com/voxpupuli/openvox-ca/pull/471)), 404 for revoking an unknown subject ([#372](https://github.com/voxpupuli/openvox-ca/pull/372)), 409 for signing with no CSR ([#486](https://github.com/voxpupuli/openvox-ca/pull/486)).
 - `test:puppet` (`test/compose-puppet.yml`) runs OpenVox Server with its CA disabled, an OpenVox agent and OpenVoxDB, and checks catalog compilation, OpenVoxDB reporting, exported resources and CRL revocation through openvox-ca with genuine TLS.
 
 Sources: [Migration guide: differences to be aware of](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#differences-to-be-aware-of), [authorisation parity](https://github.com/voxpupuli/openvox-ca/blob/main/docs/migrating-from-puppet-server.md#authorisation-parity); [Configuration](https://github.com/voxpupuli/openvox-ca/blob/main/docs/configuration.md); [Testing](https://github.com/voxpupuli/openvox-ca/blob/main/docs/development/testing.md).
@@ -262,7 +228,7 @@ flowchart LR
 - The CRL agents download is served straight from storage. What lags is each replica's own revocation verdicts (client certificates it accepts, OCSP answers): reloaded every `crl_sync_interval_sec` (60 s). The OCSP serial index reloads every `ocsp_index_sync_interval_sec` (5 min).
 - The load balancer must pass TLS through: the CA does its own mTLS.
 - **OCSP:** a built-in RFC 6960 responder (`POST /ocsp`, `GET /ocsp/{request}`) for verifiers that prefer it to CRLs; OpenVox agents use the CRL. Issued certificates advertise it only when `ocsp_url` is set. Responses are cached, with nonce support. Mention it, but don't push it: the web PKI is moving away from OCSP towards CRLs, so it's there for those who need it. See [HTTP API: OCSP](https://github.com/voxpupuli/openvox-ca/blob/main/docs/api.md#ocsp).
-- `migrate` copies the CA cert and key, CRL, inventory and every issued certificate; it isn't transactional, so back up first.
+- `migrate` copies the CA cert and key, CRL, inventory and every issued certificate; it isn't transactional, so back up first. It refuses a source whose inventory integrity check fails, unless `--allow-unverified-source` ([#522](https://github.com/voxpupuli/openvox-ca/pull/522)).
 - **Sizing to the cgroup** (containers and systemd alike): the signing-concurrency default follows the CPU limit via Go's `GOMAXPROCS`; set it explicitly with OpenBao.
 - The launcher splits the cgroup memory limit into a `GOMEMLIMIT` per process, so the three processes don't each claim the whole budget.
 
@@ -352,12 +318,10 @@ An Ingress or Gateway can then verify client certificates against openvox-ca, an
 </div>
 
 <!--
-**FIXME:** confirm managed certificates ([#243](https://github.com/voxpupuli/openvox-ca/issues/243), PR #336, 1.0.0 milestone) landed before the talk; if not, present them as coming next.
-
 - **Why export:** publish the CA certificate and CRL where cluster workloads consume trust. An Ingress or Gateway validating client certificates (mTLS at the edge) can reference the Secret directly; the default data keys `ca.crt` and `ca.crl` are what ingress-nginx's client-certificate auth expects. Every revocation re-applies the Secret, so the edge enforces it without anyone copying files.
-- **Managed certificates** ([#243](https://github.com/voxpupuli/openvox-ca/issues/243), building on [#242](https://github.com/voxpupuli/openvox-ca/issues/242)): declare `managed_certs` entries (certname, extra names, TTL, `renew_before`) and the CA issues and renews each into a Secret in the component's namespace with `tls.crt`, `tls.key` and `ca.crt`. The Secret is the only copy of the private key. Goal: bring up OpenVox Server, OpenVoxDB and OpenVox View in Kubernetes without hand-issuing, converting and renewing certificates. It isn't a general-purpose cluster CA.
+- **Managed certificates** ([#336](https://github.com/voxpupuli/openvox-ca/pull/336) and [#322](https://github.com/voxpupuli/openvox-ca/pull/322), merged for 1.0; [#344](https://github.com/voxpupuli/openvox-ca/pull/344) uses the same mechanism for the CA's own serving certificate): declare `managed_certs` entries (certname, extra names, TTL, `renew_before`) and the CA issues and renews each into a Secret in the component's namespace with `tls.crt`, `tls.key` and `ca.crt`. The Secret is the only copy of the private key. Goal: bring up OpenVox Server, OpenVoxDB and OpenVox View in Kubernetes without hand-issuing, converting and renewing certificates. It isn't a general-purpose cluster CA.
 - Chart: `helm install openvox-ca oci://ghcr.io/voxpupuli/openvox-ca-charts/openvox-ca`. Signed and attested like the images (verify with `cosign`). Dual-stack Services. Server settings pass straight through to the config file, so every option is reachable.
-- Default is the filesystem backend on a PVC, kept on `helm uninstall`; for replicas, switch to a shared backend and turn persistence off.
+- Default is the filesystem backend on a PVC, kept on `helm uninstall`; for replicas, switch to a shared backend and turn persistence off. The chart refuses more than one replica on `filesystem` or `sqlite` ([#519](https://github.com/voxpupuli/openvox-ca/pull/519)).
 - Kubernetes export publishes the CA certificate and/or CRL into any number of Secrets or ConfigMaps, via in-cluster server-side apply. Other workloads mount them as a trust bundle or for CRL checks, with no HTTP fetches or shared volumes.
   - Names, namespaces, data keys, labels, annotations and Secret `type` are configurable; `cert_scope`/`crl_scope` choose how much of the chain to publish.
   - Reconciled at startup and whenever the CRL changes (revoke, reissue, refresh, cleanup). Safe from every replica, thanks to server-side apply.
@@ -371,22 +335,21 @@ Sources: [Deploying with Helm](https://github.com/voxpupuli/openvox-ca/blob/main
 # Know before it breaks
 
 - **Prometheus exporter** on its own listener: CA and CRL expiry, every leaf certificate's expiry and status, pending CSRs, signing load, replica sync
-- **Alerting mixin** in Jsonnet: 28 ready-made alerts
+- **Alerting mixin** in Jsonnet: 29 ready-made alerts
 - **Health probes** for Kubernetes; `systemd` readiness, status line and watchdog on VMs
 
 ```text
 # Days until the CA certificate expires
-(puppetca_ca_certificate_not_after_timestamp_seconds - time()) / 86400
+(openvoxca_ca_certificate_not_after_timestamp_seconds - time()) / 86400
 
 # Non-revoked leaf certificates expiring within 7 days
-puppetca_leaf_certificate_not_after_timestamp_seconds{state!="revoked"} - time() < 7 * 86400
+openvoxca_leaf_certificate_not_after_timestamp_seconds{state!="revoked"} - time() < 7 * 86400
 ```
 
 <!--
-**FIXME:** metric names still use the `puppetca_` prefix; [#349](https://github.com/voxpupuli/openvox-ca/issues/349) (1.0.0 milestone) renames metrics and the mixin's `PuppetCA*` alerts. Update the two example queries on this slide and the names in these notes once it lands.
-
 - Enable with `metrics_listen` (e.g. `127.0.0.1:9140`). Plain HTTP on a separate listener, served by the frontend process. Leaf metrics carry hostnames as labels, so keep it on loopback or a management network.
-- Series to call out: `puppetca_ca_certificate_not_after_timestamp_seconds`, `puppetca_crl_next_update_timestamp_seconds`, `puppetca_leaf_certificate_not_after_timestamp_seconds`, `puppetca_ca_signing_in_flight` / `_shed_total`, `puppetca_crl_cached_number` (a replica's CRL behind the stored one).
+- Series to call out: `openvoxca_ca_certificate_not_after_timestamp_seconds`, `openvoxca_crl_next_update_timestamp_seconds`, `openvoxca_leaf_certificate_not_after_timestamp_seconds`, `openvoxca_ca_signing_in_flight` / `_shed_total`, `openvoxca_crl_cached_number` (a replica's CRL behind the stored one).
+- Metrics are `openvoxca_*` and alerts `OpenVoxCA*` since the rename to OpenVox CA ([#507](https://github.com/voxpupuli/openvox-ca/pull/507), merged for 1.0; environment variables are now `OPENVOX_CA_*` and paths `/etc/openvox-ca`, `/var/lib/openvox-ca`). The `/puppet-ca/v1` API path doesn't change.
 - The mixin's alerts cover exporter health, CA/CRL/leaf expiry, pending requests, CRL update and sync failures, OCSP index sync, delayed revocations, the upstream CRL chain, client trust domains, and Kubernetes export failures. Thresholds are configurable.
 - `/healthz/live`, `/healthz/ready`, `/healthz/startup`. Under systemd: `Type=notify`, a live status line (listener, CA expiry, CRL freshness) and watchdog keep-alives.
 
